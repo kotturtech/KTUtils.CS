@@ -5,6 +5,9 @@ using System.Windows.Markup;
 
 namespace KotturTech.WPFGoodies
 {
+    /// <summary>
+    /// Base class for markup extensions that are capable of updating the target properties
+    /// </summary>
     public abstract class UpdatableMarkupExtension : MarkupExtension
     {
         protected object TargetObject { get; private set; }
@@ -50,6 +53,11 @@ namespace KotturTech.WPFGoodies
             }
         }
 
+        /// <summary>
+        /// Implement this method for providing the value
+        /// </summary>
+        /// <param name="serviceProvider"></param>
+        /// <returns></returns>
         protected abstract object ProvideValueInternal(IServiceProvider serviceProvider);
     }
 }

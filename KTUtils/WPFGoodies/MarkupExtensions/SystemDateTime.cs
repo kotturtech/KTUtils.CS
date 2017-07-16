@@ -6,6 +6,11 @@ using System.Windows;
 
 namespace KotturTech.WPFGoodies.MarkupExtensions
 {
+
+    /// <summary>
+    /// Markup extension that provides the current system date and time.
+    /// Updates the target value every second
+    /// </summary>
     public class SystemDateTime : UpdatableMarkupExtension
     {
         private readonly Timer _timer;
