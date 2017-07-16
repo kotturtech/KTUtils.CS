@@ -14,11 +14,24 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
     public class SystemDateTime : UpdatableMarkupExtension
     {
         private readonly Timer _timer;
-        public string CurrentDateTimeString => string.IsNullOrWhiteSpace(StringFormat)? DateTime.Now.ToString(CultureInfo.InvariantCulture) : DateTime.Now.ToString(StringFormat);
 
-        public string StringFormat { get; set; }
+        #region StringFormatProperty
 
-      
+        public static string GetStringFormat(DependencyObject obj)
+        {
+            return (string)obj.GetValue(StringFormatProperty);
+        }
+
+        public static void SetStringFormat(DependencyObject obj, string value)
+        {
+            obj.SetValue(StringFormatProperty, value);
+        }
+
+        public static readonly DependencyProperty StringFormatProperty =
+            DependencyProperty.RegisterAttached("StringFormat", typeof(string), typeof(SystemDateTime), new UIPropertyMetadata(string.Empty));
+
+
+        #endregion
 
         public SystemDateTime()
         {
@@ -40,7 +53,7 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
                 DependencyProperty prop = TargetProperty as DependencyProperty;
                 propertyType = prop.PropertyType;
             }
-            else // _targetProperty is PropertyInfo
+            else 
             {
                 PropertyInfo pInfo = TargetProperty as PropertyInfo;
                 propertyType = pInfo?.PropertyType;
@@ -48,7 +61,21 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
 
             if (propertyType == typeof(string))
             {
-                return CurrentDateTimeString;
+                if (TargetObject is DependencyObject)
+                {
+                    var dp = TargetObject as DependencyObject;
+                    string strFormat = string.Empty;
+                    if (dp.CheckAccess())
+                        strFormat = GetStringFormat(dp);
+                    else
+                    {
+                        dp.Dispatcher.Invoke(()=>strFormat = GetStringFormat(dp));
+                    }
+
+                    if (!string.IsNullOrEmpty(strFormat))
+                        return DateTime.Now.ToString(strFormat, CultureInfo.InstalledUICulture);
+                }
+                return DateTime.Now.ToString(CultureInfo.InstalledUICulture);
             }
            
             return DateTime.Now;
