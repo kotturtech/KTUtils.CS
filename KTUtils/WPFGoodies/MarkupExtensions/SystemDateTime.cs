@@ -13,7 +13,9 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
     /// </summary>
     public class SystemDateTime : UpdatableMarkupExtension
     {
-        private readonly Timer _timer;
+        private static readonly Timer Timer;
+
+        private static event EventHandler TimerTick;
 
         #region StringFormatProperty
 
@@ -33,16 +35,20 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
 
         #endregion
 
-        public SystemDateTime()
+
+        static SystemDateTime()
         {
-            _timer = new Timer(OnTimerTick, null, 1000 - DateTime.Now.Millisecond, 1000);
+            Timer = new Timer(x=> { TimerTick?.Invoke(null,EventArgs.Empty); Timer.Change(1000 - DateTime.Now.Millisecond, 1000); }, null, 1000 - DateTime.Now.Millisecond, 1000);
         }
 
-        private void OnTimerTick(object state)
+        public SystemDateTime()
+        {
+            TimerTick += SystemDateTime_TimerTick;
+        }
+
+        private void SystemDateTime_TimerTick(object sender, EventArgs e)
         {
             UpdateValue(ProvideValueInternal(null));
-            //Resync clock on the second
-            _timer.Change(1000 - DateTime.Now.Millisecond, 1000);
         }
 
         protected override object ProvideValueInternal(IServiceProvider serviceProvider)
