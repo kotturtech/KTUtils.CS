@@ -2,6 +2,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace KotturTech.WPFGoodies.MarkupExtensions
@@ -79,7 +80,15 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
                 }
             );
             if (updateClockDispatcherOperation != null)
-                await updateClockDispatcherOperation;
+                try
+                {
+                    await updateClockDispatcherOperation;
+                }
+                catch (TaskCanceledException)
+                {
+                    //ignore in this case
+                }
+                
 
             Interlocked.Decrement(ref _busyFlag);
         }
@@ -103,9 +112,8 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
                 if (targetObject is DependencyObject)
                 {
                     var dp = targetObject as DependencyObject;
-                    string strFormat = string.Empty;
-                   
-                    strFormat = GetStringFormat(dp);
+
+                    var strFormat = GetStringFormat(dp);
                    
                     if (!string.IsNullOrEmpty(strFormat))
                         return DateTime.Now.ToString(strFormat, CultureInfo.InstalledUICulture);
