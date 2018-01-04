@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Markup;
@@ -7,57 +8,78 @@ namespace KotturTech.WPFGoodies
 {
     /// <summary>
     /// Base class for markup extensions that are capable of updating the target properties
+    /// Implementation based on this source:
+    /// https://www.thomaslevesque.com/2009/08/23/wpf-markup-extensions-and-templates/
     /// </summary>
     public abstract class UpdatableMarkupExtension : MarkupExtension
     {
-        protected object TargetObject { get; private set; }
+        private List<object> _targetObjects = new List<object>();
+        private object _targetProperty;
 
-        protected object TargetProperty { get; private set; }
+        protected IEnumerable<object> TargetObjects
+        {
+            get { return _targetObjects; }
+        }
+
+        protected object TargetProperty
+        {
+            get { return _targetProperty; }
+        }
 
         public sealed override object ProvideValue(IServiceProvider serviceProvider)
         {
+            // Retrieve target information
             IProvideValueTarget target = serviceProvider.GetService(typeof(IProvideValueTarget)) as IProvideValueTarget;
-            if (target != null)
+
+            if (target?.TargetObject != null)
             {
-                TargetObject = target.TargetObject;
-                TargetProperty = target.TargetProperty;
+                // In a template the TargetObject is a SharedDp (internal WPF class)
+                // In that case, the markup extension itself is returned to be re-evaluated later
+                if (target.TargetObject.GetType().FullName == "System.Windows.SharedDp")
+                    return this;
+
+                // Save target information for later updates
+                _targetObjects.Add(target.TargetObject);
+                _targetProperty = target.TargetProperty;
             }
 
-            return ProvideValueInternal(serviceProvider);
+            // Delegate the work to the derived class
+            if (target != null) return ProvideValueInternal(serviceProvider, target.TargetObject);
+            return null;
         }
 
-        protected void UpdateValue(object value)
+        protected virtual void UpdateValue(object value)
         {
-            if (TargetObject != null)
+            if (_targetObjects.Count > 0)
             {
-                if (TargetProperty is DependencyProperty)
+                // Update the target property of each target object
+                foreach (var target in _targetObjects)
                 {
-                    DependencyObject obj = TargetObject as DependencyObject;
-                    DependencyProperty prop = TargetProperty as DependencyProperty;
+                    if (_targetProperty is DependencyProperty)
+                    {
+                        DependencyObject obj = target as DependencyObject;
+                        DependencyProperty prop = _targetProperty as DependencyProperty;
 
-                    Action updateAction = () => obj.SetValue(prop, value);
+                        Action updateAction = () => obj.SetValue(prop, value);
 
-                    // Check whether the target object can be accessed from the
-                    // current thread, and use Dispatcher.Invoke if it can't
+                        // Check whether the target object can be accessed from the
+                        // current thread, and use Dispatcher.Invoke if it can't
 
-                    if (obj.CheckAccess())
-                        updateAction();
-                    else
-                        obj.Dispatcher.Invoke(updateAction);
-                }
-                else // _targetProperty is PropertyInfo
-                {
-                    PropertyInfo prop = TargetProperty as PropertyInfo;
-                    prop.SetValue(TargetObject, value, null);
+                        if (obj.CheckAccess())
+                            updateAction();
+                        else
+                            obj.Dispatcher.BeginInvoke(updateAction);
+                    }
+                    else // _targetProperty is PropertyInfo
+                    {
+                        PropertyInfo prop = _targetProperty as PropertyInfo;
+                        prop.SetValue(target, value, null);
+                    }
                 }
             }
         }
 
-        /// <summary>
-        /// Implement this method for providing the value
-        /// </summary>
-        /// <param name="serviceProvider"></param>
-        /// <returns></returns>
-        protected abstract object ProvideValueInternal(IServiceProvider serviceProvider);
+        protected abstract object ProvideValueInternal(IServiceProvider serviceProvider, object targetObject);
     }
+    
 }

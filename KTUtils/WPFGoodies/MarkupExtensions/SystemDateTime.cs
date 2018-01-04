@@ -13,10 +13,17 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
     /// </summary>
     public class SystemDateTime : UpdatableMarkupExtension
     {
+        #region Private Fields
+
         private static readonly Timer Timer;
 
-        private static event EventHandler TimerTick;
+        private int _busyFlag;
 
+        private static event EventHandler TimerTick;
+        
+
+        #endregion
+       
         #region StringFormatProperty
 
         public static string GetStringFormat(DependencyObject obj)
@@ -33,11 +40,14 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
             DependencyProperty.RegisterAttached("StringFormat", typeof(string), typeof(SystemDateTime), new UIPropertyMetadata(string.Empty));
 
 
+
         #endregion
 
+        #region MyRegion
 
         static SystemDateTime()
         {
+            //Starting the timer, while invoking the callback each next second: 1000 ms - current time milliseconds gives amount of millisecond to the next full second
             Timer = new Timer(x=> { TimerTick?.Invoke(null,EventArgs.Empty); Timer.Change(1000 - DateTime.Now.Millisecond, 1000); }, null, 1000 - DateTime.Now.Millisecond, 1000);
         }
 
@@ -46,12 +56,35 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
             TimerTick += SystemDateTime_TimerTick;
         }
 
-        private void SystemDateTime_TimerTick(object sender, EventArgs e)
+        #endregion
+       
+        private async void SystemDateTime_TimerTick(object sender, EventArgs e)
         {
-            UpdateValue(ProvideValueInternal(null));
+            //Using busy flag: If some updates are so busy that next time interval came and the previous updates still go on,
+            //just skip the new update to avoid threads piling up, and let the single active thread quietly finish its job
+            Interlocked.Increment(ref _busyFlag);
+
+            if (_busyFlag > 1)
+            {
+                Interlocked.Decrement(ref _busyFlag);
+                return;
+            }
+
+            //Invoking asynchronously on UI thread, to avoid deadlocks
+            var updateClockDispatcherOperation = Application.Current?.Dispatcher?.InvokeAsync(
+                () =>
+                {
+                    foreach (var targetObject in TargetObjects)
+                        UpdateValue(ProvideValueInternal(null, targetObject));
+                }
+            );
+            if (updateClockDispatcherOperation != null)
+                await updateClockDispatcherOperation;
+
+            Interlocked.Decrement(ref _busyFlag);
         }
 
-        protected override object ProvideValueInternal(IServiceProvider serviceProvider)
+        protected override object ProvideValueInternal(IServiceProvider serviceProvider, object targetObject)
         {
             Type propertyType;
             if (TargetProperty is DependencyProperty)
@@ -67,17 +100,13 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
 
             if (propertyType == typeof(string))
             {
-                if (TargetObject is DependencyObject)
+                if (targetObject is DependencyObject)
                 {
-                    var dp = TargetObject as DependencyObject;
+                    var dp = targetObject as DependencyObject;
                     string strFormat = string.Empty;
-                    if (dp.CheckAccess())
-                        strFormat = GetStringFormat(dp);
-                    else
-                    {
-                        dp.Dispatcher.Invoke(()=>strFormat = GetStringFormat(dp));
-                    }
-
+                   
+                    strFormat = GetStringFormat(dp);
+                   
                     if (!string.IsNullOrEmpty(strFormat))
                         return DateTime.Now.ToString(strFormat, CultureInfo.InstalledUICulture);
                 }
@@ -87,5 +116,6 @@ namespace KotturTech.WPFGoodies.MarkupExtensions
             return DateTime.Now;
             
         }
+
     }
 }
